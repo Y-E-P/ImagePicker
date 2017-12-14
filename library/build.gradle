@@ -15,12 +15,12 @@
  */
 
 apply plugin: 'com.android.library'
-apply plugin: 'checkstyle'
+//apply plugin: 'checkstyle'
 apply from: "$project.rootDir/script-git-version.gradle"
 
-preBuild.dependsOn('checkstyle')
-assemble.dependsOn('lint')
-check.dependsOn('checkstyle')
+//preBuild.dependsOn('checkstyle')
+//assemble.dependsOn('lint')
+//check.dependsOn('checkstyle')
 
 def config = rootProject.ext.configuration;
 def libs = rootProject.ext.libraries;
@@ -45,7 +45,7 @@ android {
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    testCompile 'junit:junit:4.12'
-    compile "com.android.support:appcompat-v7:${libs.supportVersion}"
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    testImplementation 'junit:junit:4.12'
+    implementation "com.android.support:appcompat-v7:${libs.supportVersion}"
 }
