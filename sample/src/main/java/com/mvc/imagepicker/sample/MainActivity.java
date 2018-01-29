@@ -63,6 +63,6 @@ public class MainActivity extends AppCompatActivity {
   }
 
   public void onPickImage(View view) {
-    ImagePicker.pickImage(this, "Select your image:");
+    ImagePicker.pickImageGallery(this);
   }
 }

@@ -16,26 +16,28 @@
 
 package com.mvc.imagepicker.sample;
 
+import android.Manifest.permission;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.TextView;
+import com.karumi.dexter.Dexter;
+import com.karumi.dexter.MultiplePermissionsReport;
+import com.karumi.dexter.PermissionToken;
+import com.karumi.dexter.listener.PermissionRequest;
+import com.karumi.dexter.listener.multi.MultiplePermissionsListener;
 import com.mvc.imagepicker.ImagePicker;
 import com.mvc.imagepicker.ImageRotator;
 import com.mvc.imagepicker.ImageUtils;
 import com.squareup.picasso.Picasso;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.util.List;
 
 /**
  * Author: Mario Velasco Casquero
@@ -46,13 +48,11 @@ public class MainFragment extends Fragment {
 
   public static final String CACHED_IMG_KEY = "img_key";
 
-  public static final int SECOND_PIC_REQ = 1313;
-  public static final int GALLERY_ONLY_REQ = 1212;
+  public static final int CAMERA_IMAGE = 1313;
+  public static final int GALLERY_IMAGE = 1212;
 
   private ImageView imageView1;
   private ImageView imageView2;
-  private ImageView imageViewGalleryOnly;
-  private TextView textView;
 
 
   @Override
@@ -68,83 +68,98 @@ public class MainFragment extends Fragment {
     View v = inflater.inflate(R.layout.fragment_main, container, false);
     imageView1 = v.findViewById(R.id.image_view_1);
     imageView2 = v.findViewById(R.id.image_view_2);
-    imageViewGalleryOnly = v.findViewById(R.id.image_view_gallery_only);
-    textView = v.findViewById(R.id.image_stream_indicator);
     imageView1.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View v) {
-        ImagePicker.pickImage(MainFragment.this, "Select your image:");
+        openImageCamera();
       }
     });
-    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
-    String path = prefs.getString(CACHED_IMG_KEY, "");
-    File cached = new File(path);
-    if (cached.exists()) {
-      Picasso.with(getActivity()).load(cached).into(imageView2);
-    }
     imageView2.setOnClickListener(new View.OnClickListener() {
       @Override
       public void onClick(View v) {
-        ImagePicker.pickImage(MainFragment.this, SECOND_PIC_REQ);
-      }
-    });
-    imageViewGalleryOnly.setOnClickListener(new View.OnClickListener() {
-      @Override
-      public void onClick(View v) {
-        ImagePicker.pickImageGalleryOnly(MainFragment.this, GALLERY_ONLY_REQ);
+        openImageGallery();
       }
     });
     return v;
   }
 
+
+  private void openImageGallery() {
+    Dexter.withActivity(getActivity())
+        .withPermissions(
+            permission.READ_EXTERNAL_STORAGE,
+            permission.WRITE_EXTERNAL_STORAGE,
+            permission.CAMERA)
+        .withListener(new MultiplePermissionsListener() {
+          @Override
+          public void onPermissionsChecked(MultiplePermissionsReport report) {
+            if (report.areAllPermissionsGranted()) {
+              ImagePicker.pickImageGallery(MainFragment.this, GALLERY_IMAGE);
+            }
+          }
+
+          @Override
+          public void onPermissionRationaleShouldBeShown(List<PermissionRequest> permissions,
+              PermissionToken token) {
+            token.continuePermissionRequest();
+          }
+        })
+        .onSameThread()
+        .check();
+  }
+
+  private void openImageCamera() {
+    Dexter.withActivity(getActivity())
+        .withPermissions(
+            permission.READ_EXTERNAL_STORAGE,
+            permission.WRITE_EXTERNAL_STORAGE,
+            permission.CAMERA)
+        .withListener(new MultiplePermissionsListener() {
+          @Override
+          public void onPermissionsChecked(MultiplePermissionsReport report) {
+            if (report.areAllPermissionsGranted()) {
+              ImagePicker.pickImageCamera(MainFragment.this, CAMERA_IMAGE);
+            }
+          }
+
+          @Override
+          public void onPermissionRationaleShouldBeShown(List<PermissionRequest> permissions,
+              PermissionToken token) {
+            token.continuePermissionRequest();
+          }
+        })
+        .onSameThread()
+        .check();
+  }
+
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent data) {
     switch (requestCode) {
-      case SECOND_PIC_REQ:
-        String imagePathFromResult = ImagePicker.getImagePathFromResult(getActivity(),
-            requestCode, resultCode, data);
+      case CAMERA_IMAGE:
+        String imagePathFromResult = ImagePicker.getImagePathFromCameraResult(getActivity(),
+            requestCode, resultCode);
         if (imagePathFromResult != null) {
           String path = "file:///" + imagePathFromResult;
-          SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
-          prefs.edit().putString(CACHED_IMG_KEY, imagePathFromResult).apply();
           BitmapFactory.Options bmOptions = new BitmapFactory.Options();
-          Bitmap bitmap = BitmapFactory.decodeFile(imagePathFromResult,bmOptions);
+          Bitmap bitmap = BitmapFactory.decodeFile(imagePathFromResult, bmOptions);
           if (bitmap != null) {
-            bitmap = ImageRotator.rotate(bitmap,90);
+            int degrees = ImageRotator.getRotation(getContext(), Uri.parse(path), true);
+            bitmap = ImageRotator.rotate(bitmap, degrees);
             path = "file:///" + ImageUtils
-                .savePicture(getContext(), bitmap, String.valueOf(imagePathFromResult.hashCode()));
-            //imageView2.setImageBitmap(bitmap);
+                .savePicture(getContext(), bitmap,
+                    String.valueOf(imagePathFromResult.hashCode()).concat(".jpeg"));
           }
-          //bitmap = Bitmap.createScaledBitmap(bitmap,parent.getWidth(),parent.getHeight(),true);
-          Picasso.with(getActivity()).load(path).into(imageView2);
+          Picasso.with(getActivity()).load(path).into(imageView1);
         }
         break;
-      case GALLERY_ONLY_REQ:
+      case GALLERY_IMAGE:
         String pathFromGallery =
             "file:///" + ImagePicker.getImagePathFromResult(getActivity(), requestCode,
                 resultCode, data);
-        Picasso.with(getActivity()).load(pathFromGallery).into(imageViewGalleryOnly);
+        Picasso.with(getActivity()).load(pathFromGallery).into(imageView2);
         break;
-      default:
-        Bitmap bitmap = ImagePicker
-            .getImageFromResult(getActivity(), requestCode, resultCode, data);
-        if (bitmap != null) {
-          bitmap = ImageRotator.rotate(bitmap,90);
-          imageView1.setImageBitmap(bitmap);
-        }
-    }
-    InputStream is = ImagePicker
-        .getInputStreamFromResult(getActivity(), requestCode, resultCode, data);
-    if (is != null) {
-      textView.setText("Got input stream!");
-      try {
-        is.close();
-      } catch (IOException ex) {
-        ex.printStackTrace();
-      }
-    } else {
-      textView.setText("Failed to get input stream!");
     }
     super.onActivityResult(requestCode, resultCode, data);
   }
+
 }
